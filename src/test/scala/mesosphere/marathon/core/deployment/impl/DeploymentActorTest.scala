@@ -125,11 +125,11 @@ class DeploymentActorTest extends AkkaUnitTest with GroupCreation {
       tracker.specInstances(Matchers.eq(app3.id))(any[ExecutionContext]) returns Future.successful(Seq(instance3_1))
       tracker.specInstances(Matchers.eq(app4.id))(any[ExecutionContext]) returns Future.successful(Seq(instance4_1))
 
-      when(queue.add(same(app2New), any[Int])).thenAnswer(new Answer[Boolean] {
-        def answer(invocation: InvocationOnMock): Boolean = {
+      when(queue.add(same(app2New), any[Int])).thenAnswer(new Answer[Done] {
+        def answer(invocation: InvocationOnMock): Done = {
           for (i <- 0 until invocation.getArguments()(1).asInstanceOf[Int])
             system.eventStream.publish(instanceChanged(app2New, Condition.Running))
-          true
+          Done
         }
       })
 
@@ -171,11 +171,11 @@ class DeploymentActorTest extends AkkaUnitTest with GroupCreation {
         override def answer(p1: InvocationOnMock): Int = appNew.instances
       })
 
-      when(queue.add(same(appNew), any[Int])).thenAnswer(new Answer[Boolean] {
-        def answer(invocation: InvocationOnMock): Boolean = {
+      when(queue.add(same(appNew), any[Int])).thenAnswer(new Answer[Done] {
+        def answer(invocation: InvocationOnMock): Done = {
           for (i <- 0 until invocation.getArguments()(1).asInstanceOf[Int])
             system.eventStream.publish(instanceChanged(appNew, Condition.Running))
-          true
+          Done
         }
       })
 
