@@ -19,7 +19,7 @@ import mesosphere.marathon.state.{ AppDefinition, Command, Timestamp }
 import mesosphere.marathon.test.MarathonTestHelper
 import org.mockito.Mockito.{ spy, when }
 
-import scala.concurrent.Promise
+import scala.concurrent.{ Future, Promise }
 
 class TaskStartActorTest extends AkkaUnitTest {
   "TaskStartActor" should {
@@ -34,11 +34,11 @@ class TaskStartActorTest extends AkkaUnitTest {
         val promise = Promise[Unit]()
         val app = AppDefinition("/myApp".toPath, instances = 5)
 
-        when(f.launchQueue.get(app.id)).thenReturn(counts)
+        when(f.launchQueue.getAsync(app.id)).thenReturn(Future.successful(counts))
         val ref = f.startActor(app, app.instances, promise)
         watch(ref)
 
-        verify(f.launchQueue, timeout(3000)).add(app, app.instances)
+        verify(f.launchQueue, timeout(3000)).addAsync(app, app.instances)
 
         for (i <- 0 until app.instances)
           system.eventStream.publish(f.instanceChange(app, Instance.Id.forRunSpec(app.id), Running))
@@ -55,12 +55,12 @@ class TaskStartActorTest extends AkkaUnitTest {
       val promise = Promise[Unit]()
       val app = AppDefinition("/myApp".toPath, instances = 5)
 
-      when(f.launchQueue.get(app.id)).thenReturn(counts)
+      f.launchQueue.getAsync(app.id) returns Future.successful(counts)
 
       val ref = f.startActor(app, app.instances, promise)
       watch(ref)
 
-      verify(f.launchQueue, timeout(3000)).add(app, app.instances - 1)
+      verify(f.launchQueue, timeout(3000)).addAsync(app, app.instances - 1)
 
       for (i <- 0 until (app.instances - 1))
         system.eventStream.publish(f.instanceChange(app, Instance.Id(s"task-$i"), Running))
@@ -75,14 +75,14 @@ class TaskStartActorTest extends AkkaUnitTest {
       val promise = Promise[Unit]()
       val app = AppDefinition("/myApp".toPath, instances = 5)
 
-      when(f.launchQueue.get(app.id)).thenReturn(None)
+      f.launchQueue.getAsync(app.id) returns Future.successful(None)
       val instance = TestInstanceBuilder.newBuilder(app.id, version = Timestamp(1024)).addTaskStarting().getInstance()
       f.taskCreationHandler.created(InstanceUpdateOperation.LaunchEphemeral(instance)).futureValue
 
       val ref = f.startActor(app, app.instances, promise)
       watch(ref)
 
-      verify(f.launchQueue, timeout(3000)).add(app, app.instances - 1)
+      verify(f.launchQueue, timeout(3000)).addAsync(app, app.instances - 1)
 
       for (i <- 0 until (app.instances - 1))
         system.eventStream.publish(f.instanceChange(app, Instance.Id(s"task-$i"), Running))
@@ -96,7 +96,7 @@ class TaskStartActorTest extends AkkaUnitTest {
       val f = new Fixture
       val promise = Promise[Unit]()
       val app = AppDefinition("/myApp".toPath, instances = 0)
-      when(f.launchQueue.get(app.id)).thenReturn(None)
+      f.launchQueue.getAsync(app.id) returns Future.successful(None)
 
       val ref = f.startActor(app, app.instances, promise)
       watch(ref)
@@ -114,12 +114,12 @@ class TaskStartActorTest extends AkkaUnitTest {
         instances = 5,
         healthChecks = Set(MesosCommandHealthCheck(command = Command("true")))
       )
-      when(f.launchQueue.get(app.id)).thenReturn(None)
+      f.launchQueue.getAsync(app.id) returns Future.successful(None)
 
       val ref = f.startActor(app, app.instances, promise)
       watch(ref)
 
-      verify(f.launchQueue, timeout(3000)).add(app, app.instances)
+      verify(f.launchQueue, timeout(3000)).addAsync(app, app.instances)
 
       for (i <- 0 until app.instances)
         system.eventStream.publish(f.healthChange(app, Instance.Id(s"task_$i"), healthy = true))
@@ -137,7 +137,7 @@ class TaskStartActorTest extends AkkaUnitTest {
         instances = 0,
         healthChecks = Set(MesosCommandHealthCheck(command = Command("true")))
       )
-      when(f.launchQueue.get(app.id)).thenReturn(None)
+      f.launchQueue.getAsync(app.id) returns Future.successful(None)
 
       val ref = f.startActor(app, app.instances, promise)
       watch(ref)
@@ -152,15 +152,15 @@ class TaskStartActorTest extends AkkaUnitTest {
       val promise = Promise[Unit]()
       val app = AppDefinition("/myApp".toPath, instances = 1)
 
-      when(f.launchQueue.get(app.id)).thenReturn(None)
+      f.launchQueue.getAsync(app.id) returns Future.successful(None)
       val ref = f.startActor(app, app.instances, promise)
       watch(ref)
 
-      verify(f.launchQueue, timeout(3000)).add(app, app.instances)
+      verify(f.launchQueue, timeout(3000)).addAsync(app, app.instances)
 
       system.eventStream.publish(f.instanceChange(app, Instance.Id.forRunSpec(app.id), Failed))
 
-      verify(f.launchQueue, timeout(3000)).add(app, 1)
+      verify(f.launchQueue, timeout(3000)).addAsync(app, 1)
 
       for (i <- 0 until app.instances)
         system.eventStream.publish(f.instanceChange(app, Instance.Id.forRunSpec(app.id), Running))
@@ -174,7 +174,7 @@ class TaskStartActorTest extends AkkaUnitTest {
       val f = new Fixture
       val promise = Promise[Unit]()
       val app = AppDefinition("/myApp".toPath, instances = 5)
-      when(f.launchQueue.get(app.id)).thenReturn(None)
+      f.launchQueue.getAsync(app.id) returns Future.successful(None)
 
       val outdatedInstance = TestInstanceBuilder.newBuilder(app.id, version = Timestamp(1024)).addTaskStaged().getInstance()
       val instanceId = outdatedInstance.instanceId
@@ -184,15 +184,15 @@ class TaskStartActorTest extends AkkaUnitTest {
       watch(ref)
 
       // wait for initial sync
-      verify(f.launchQueue, timeout(3000)).get(app.id)
-      verify(f.launchQueue, timeout(3000)).add(app, app.instances - 1)
+      verify(f.launchQueue, timeout(3000)).getAsync(app.id)
+      verify(f.launchQueue, timeout(3000)).addAsync(app, app.instances - 1)
 
       noMoreInteractions(f.launchQueue)
       reset(f.launchQueue)
 
       // let existing task die
-      when(f.taskTracker.countLaunchedSpecInstancesSync(app.id)).thenReturn(0)
-      when(f.launchQueue.get(app.id)).thenReturn(Some(LaunchQueueTestHelper.zeroCounts.copy(instancesLeftToLaunch = 4, finalInstanceCount = 4)))
+      f.taskTracker.countLaunchedSpecInstances(app.id) returns Future.successful(0)
+      f.launchQueue.getAsync(app.id) returns Future.successful(Some(LaunchQueueTestHelper.zeroCounts.copy(instancesLeftToLaunch = 4, finalInstanceCount = 4)))
       // The version does not match the app.version so that it is filtered in StartingBehavior.
       // does that make sense?
       val (_, outdatedTask) = outdatedInstance.tasksMap.head
@@ -200,15 +200,15 @@ class TaskStartActorTest extends AkkaUnitTest {
 
       // sync will reschedule task
       ref ! StartingBehavior.Sync
-      verify(f.launchQueue, timeout(3000)).get(app.id)
-      verify(f.launchQueue, timeout(3000)).add(app, 1)
+      verify(f.launchQueue, timeout(3000)).getAsync(app.id)
+      verify(f.launchQueue, timeout(3000)).addAsync(app, 1)
 
       noMoreInteractions(f.launchQueue)
       reset(f.launchQueue)
 
       // launch 4 of the tasks
-      when(f.launchQueue.get(app.id)).thenReturn(Some(LaunchQueueTestHelper.zeroCounts.copy(instancesLeftToLaunch = app.instances, finalInstanceCount = 4)))
-      when(f.taskTracker.countLaunchedSpecInstancesSync(app.id)).thenReturn(4)
+      f.launchQueue.getAsync(app.id) returns Future.successful(Some(LaunchQueueTestHelper.zeroCounts.copy(instancesLeftToLaunch = app.instances, finalInstanceCount = 4)))
+      f.taskTracker.countLaunchedSpecInstances(app.id) returns Future.successful(4)
       List(0, 1, 2, 3) foreach { i =>
         system.eventStream.publish(f.instanceChange(app, Instance.Id(s"task-$i"), Running))
       }

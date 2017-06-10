@@ -55,10 +55,10 @@ private[launchqueue] class LaunchQueueDelegate(
   override def count(runSpecId: PathId): Int = get(runSpecId).map(_.instancesLeftToLaunch).getOrElse(0)
 
   override def countAsync(runSpecId: PathId): Future[Int] =
-    getAsync(runSpecId).map(c => c match {
+    getAsync(runSpecId).map {
       case Some(i) => i.instancesLeftToLaunch
       case None => 0
-    })(ExecutionContexts.global)
+    }(ExecutionContexts.global)
 
   override def listRunSpecs: Seq[RunSpec] = list.map(_.runSpec)
 

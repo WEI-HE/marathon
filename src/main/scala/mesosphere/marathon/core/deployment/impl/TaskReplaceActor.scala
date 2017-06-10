@@ -1,9 +1,13 @@
 package mesosphere.marathon
 package core.deployment.impl
 
+import java.util.concurrent.atomic.AtomicInteger
+
+import akka.Done
 import akka.actor._
 import akka.event.EventStream
 import com.typesafe.scalalogging.StrictLogging
+import mesosphere.marathon.core.async.ExecutionContexts.global
 import mesosphere.marathon.core.event._
 import mesosphere.marathon.core.instance.Instance
 import mesosphere.marathon.core.instance.Instance.Id
@@ -15,7 +19,8 @@ import mesosphere.marathon.core.task.tracker.InstanceTracker
 import mesosphere.marathon.state.RunSpec
 
 import scala.collection.{ SortedSet, mutable }
-import scala.concurrent.Promise
+import scala.concurrent.{ Future, Promise }
+import akka.pattern._
 
 class TaskReplaceActor(
     val deploymentManager: ActorRef,
@@ -100,11 +105,18 @@ class TaskReplaceActor(
     // Old instance successfully killed
     case InstanceChanged(id, _, `pathId`, condition, _) if oldInstanceIds(id) && considerTerminal(condition) =>
       oldInstanceIds -= id
-      launchInstances()
-      checkFinished()
+      launchInstances().map(_ => checkFinished())
 
     // Ignore change events, that are not handled in parent receives
     case _: InstanceChanged =>
+
+    case Status.Failure(e) =>
+      // This is the result of failed launchQueue.addAsync(...) call. Log the message and
+      // restart this actor. Next reincarnation should try to start from the beginning.
+      logger.error("Failed to launch instances: ", e)
+      throw e
+
+    case Done => // This is the result of successful launchQueue.addAsync(...) call. Nothing to do here
 
   }
 
@@ -119,15 +131,16 @@ class TaskReplaceActor(
     instancesAlreadyStarted.foreach(reconcileHealthAndReadinessCheck)
   }
 
-  def launchInstances(): Unit = {
+  def launchInstances(): Future[Done] = {
     val leftCapacity = math.max(0, ignitionStrategy.maxCapacity - oldInstanceIds.size - instancesStarted)
     val instancesNotStartedYet = math.max(0, runSpec.instances - instancesStarted)
     val instancesToStartNow = math.min(instancesNotStartedYet, leftCapacity)
     if (instancesToStartNow > 0) {
       logger.info(s"Reconciling instances during app $pathId restart: queuing $instancesToStartNow new instances")
-      launchQueue.add(runSpec, instancesToStartNow)
       instancesStarted += instancesToStartNow
+      launchQueue.addAsync(runSpec, instancesToStartNow).pipeTo(self)
     }
+    Future.successful(Done)
   }
 
   def killNextOldInstance(maybeNewInstanceId: Option[Instance.Id] = None): Unit = {

@@ -6,6 +6,7 @@ import java.util.concurrent.TimeoutException
 import akka.actor.ActorRef
 import akka.pattern.{ AskTimeoutException, ask }
 import akka.util.Timeout
+import mesosphere.marathon.core.async.ExecutionContexts
 import mesosphere.marathon.core.instance.Instance
 import mesosphere.marathon.core.task.tracker.{ InstanceTracker, InstanceTrackerConfig }
 import mesosphere.marathon.metrics.{ Metrics, ServiceMetric }
@@ -25,8 +26,7 @@ private[tracker] class InstanceTrackerDelegate(
     taskTrackerRef: ActorRef) extends InstanceTracker {
 
   override def instancesBySpecSync: InstanceTracker.InstancesBySpec = {
-    import mesosphere.marathon.core.async.ExecutionContexts.global
-    Await.result(instancesBySpec(), taskTrackerQueryTimeout.duration)
+    Await.result(instancesBySpec()(ExecutionContexts.global), taskTrackerQueryTimeout.duration)
   }
 
   override def instancesBySpec()(implicit ec: ExecutionContext): Future[InstanceTracker.InstancesBySpec] = tasksByAppTimer {
@@ -42,6 +42,10 @@ private[tracker] class InstanceTrackerDelegate(
   // TODO(jdef) support pods when counting launched instances
   override def countLaunchedSpecInstancesSync(appId: PathId): Int =
     instancesBySpecSync.specInstances(appId).count(_.isLaunched)
+  override def countLaunchedSpecInstances(appId: PathId): Future[Int] = {
+    import mesosphere.marathon.core.async.ExecutionContexts.global
+    instancesBySpec().map(_.specInstances(appId).count(_.isLaunched))
+  }
 
   override def hasSpecInstancesSync(appId: PathId): Boolean = instancesBySpecSync.hasSpecInstances(appId)
   override def hasSpecInstances(appId: PathId)(implicit ec: ExecutionContext): Future[Boolean] =
