@@ -15,6 +15,7 @@ import scala.async.Async.{ async, await }
 import scala.concurrent.{ Future, Promise }
 import mesosphere.marathon.core.async.ExecutionContexts.global
 
+@SuppressWarnings(Array("all")) // async/await
 class TaskStartActor(
     val deploymentManager: ActorRef,
     val status: DeploymentStatus,
@@ -35,6 +36,7 @@ class TaskStartActor(
     Math.max(0, scaleTo - alreadyLaunched)
   }
 
+  @SuppressWarnings(Array("all")) // async/await
   def initializeStart(): Future[Done] = async {
     val toStart = await(nrToStart)
     if (toStart > 0) await(launchQueue.addAsync(runSpec, toStart))

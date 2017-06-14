@@ -1,11 +1,10 @@
 package mesosphere.marathon
 package core.deployment.impl
 
-import java.util.concurrent.atomic.AtomicInteger
-
 import akka.Done
 import akka.actor._
 import akka.event.EventStream
+import akka.pattern._
 import com.typesafe.scalalogging.StrictLogging
 import mesosphere.marathon.core.async.ExecutionContexts.global
 import mesosphere.marathon.core.event._
@@ -20,7 +19,6 @@ import mesosphere.marathon.state.RunSpec
 
 import scala.collection.{ SortedSet, mutable }
 import scala.concurrent.{ Future, Promise }
-import akka.pattern._
 
 class TaskReplaceActor(
     val deploymentManager: ActorRef,

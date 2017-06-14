@@ -2,11 +2,9 @@ package mesosphere.marathon
 package core.deployment.impl
 
 import akka.Done
-import akka.actor._
-import akka.event.EventStream
-import akka.actor.OneForOneStrategy
 import akka.actor.SupervisorStrategy._
-import scala.concurrent.duration._
+import akka.actor.{ OneForOneStrategy, _ }
+import akka.event.EventStream
 import com.typesafe.scalalogging.StrictLogging
 import mesosphere.marathon.core.deployment._
 import mesosphere.marathon.core.deployment.impl.DeploymentActor.{ Cancel, Fail, NextStep }

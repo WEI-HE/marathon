@@ -30,6 +30,7 @@ trait StartingBehavior extends ReadinessBehavior { this: Actor =>
 
   private[this] val log = LoggerFactory.getLogger(getClass)
 
+  @SuppressWarnings(Array("all")) // async/await
   final override def preStart(): Unit = {
     if (hasHealthChecks) eventBus.subscribe(self, classOf[InstanceHealthChanged])
     eventBus.subscribe(self, classOf[InstanceChanged])
