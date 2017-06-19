@@ -1,6 +1,7 @@
 package mesosphere.marathon
 package core.deployment.impl
 
+import akka.Done
 import akka.testkit.{ TestActorRef, TestProbe }
 import mesosphere.AkkaUnitTest
 import mesosphere.marathon.core.condition.Condition
@@ -16,7 +17,7 @@ import mesosphere.marathon.test.MarathonTestHelper
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 
 import scala.concurrent.duration._
-import scala.concurrent.{ Promise }
+import scala.concurrent.{ Future, Promise }
 
 class AppStartActorTest extends AkkaUnitTest {
   "AppStartActor" should {
@@ -59,6 +60,7 @@ class AppStartActorTest extends AkkaUnitTest {
       val f = new Fixture
       val app = AppDefinition(id = f.appId, instances = 10)
       val promise = Promise[Unit]()
+      f.scheduler.startRunSpec(any) returns Future.successful(Done)
       val ref = f.startActor(app, scaleTo = 0, promise)
       watch(ref)
 
@@ -75,6 +77,7 @@ class AppStartActorTest extends AkkaUnitTest {
         instances = 10,
         healthChecks = Set(MarathonHttpHealthCheck(portIndex = Some(PortReference(0)))))
       val promise = Promise[Unit]()
+      f.scheduler.startRunSpec(any) returns Future.successful(Done)
       val ref = f.startActor(app, scaleTo = 0, promise)
       watch(ref)
 

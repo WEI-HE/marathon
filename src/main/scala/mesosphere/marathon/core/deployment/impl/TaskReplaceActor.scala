@@ -19,6 +19,7 @@ import mesosphere.marathon.state.RunSpec
 
 import scala.collection.{ SortedSet, mutable }
 import scala.concurrent.{ Future, Promise }
+import scala.async.Async.{ async, await }
 
 class TaskReplaceActor(
     val deploymentManager: ActorRef,
@@ -129,17 +130,17 @@ class TaskReplaceActor(
     instancesAlreadyStarted.foreach(reconcileHealthAndReadinessCheck)
   }
 
-  def launchInstances(): Future[Done] = {
+  def launchInstances(): Future[Done] = async {
     val leftCapacity = math.max(0, ignitionStrategy.maxCapacity - oldInstanceIds.size - instancesStarted)
     val instancesNotStartedYet = math.max(0, runSpec.instances - instancesStarted)
     val instancesToStartNow = math.min(instancesNotStartedYet, leftCapacity)
     if (instancesToStartNow > 0) {
       logger.info(s"Reconciling instances during app $pathId restart: queuing $instancesToStartNow new instances")
       instancesStarted += instancesToStartNow
-      launchQueue.addAsync(runSpec, instancesToStartNow).pipeTo(self)
+      await(launchQueue.addAsync(runSpec, instancesToStartNow))
     }
-    Future.successful(Done)
-  }
+    Done
+  }.pipeTo(self)
 
   def killNextOldInstance(maybeNewInstanceId: Option[Instance.Id] = None): Unit = {
     if (toKill.nonEmpty) {

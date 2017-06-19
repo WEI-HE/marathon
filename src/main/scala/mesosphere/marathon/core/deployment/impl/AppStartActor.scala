@@ -13,8 +13,6 @@ import mesosphere.marathon.core.task.tracker.InstanceTracker
 import mesosphere.marathon.state.RunSpec
 
 import scala.concurrent.{ Future, Promise }
-import scala.async.Async.{ async }
-import mesosphere.marathon.core.async.ExecutionContexts.global
 
 class AppStartActor(
     val deploymentManager: ActorRef,
@@ -31,12 +29,11 @@ class AppStartActor(
 
   override val nrToStart = Future.successful(scaleTo)
 
-  override def initializeStart(): Future[Done] = async {
+  override def initializeStart(): Future[Done] = {
     // In case we already have running instances (can happen on master abdication during deployment)
     // with the correct version those will not be killed.
     val runningInstances = currentInstances.count(_.isActive)
     scheduler.startRunSpec(runSpec.withInstances(Math.max(runningInstances, scaleTo)))
-    Done
   }
 
   override def postStop(): Unit = {
