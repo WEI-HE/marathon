@@ -2,6 +2,7 @@ package mesosphere.marathon
 package core.deployment.impl
 
 import akka.Done
+import akka.pattern._
 import akka.actor.{ Actor, ActorRef, Props }
 import akka.event.EventStream
 import com.typesafe.scalalogging.StrictLogging
@@ -34,14 +35,14 @@ class TaskStartActor(
       case None => await(instanceTracker.countLaunchedSpecInstances(runSpec.id))
     }
     Math.max(0, scaleTo - alreadyLaunched)
-  }
+  }.pipeTo(self)
 
   @SuppressWarnings(Array("all")) // async/await
-  def initializeStart(): Future[Done] = async {
+  override def initializeStart(): Future[Done] = async {
     val toStart = await(nrToStart)
     if (toStart > 0) await(launchQueue.addAsync(runSpec, toStart))
     else Done
-  }
+  }.pipeTo(self)
 
   override def postStop(): Unit = {
     eventBus.unsubscribe(self)

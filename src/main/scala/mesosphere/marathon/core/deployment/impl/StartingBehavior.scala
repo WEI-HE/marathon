@@ -48,7 +48,7 @@ trait StartingBehavior extends ReadinessBehavior with StrictLogging { this: Acto
     case InstanceChanged(id, `version`, `pathId`, _: Terminal, _) =>
       logger.warn(s"New instance [$id] failed during app ${runSpec.id.toString} scaling, queueing another instance")
       instanceTerminated(id)
-      launchQueue.addAsync(runSpec).pipeTo(self)
+      launchQueue.addAsync(runSpec, 1).pipeTo(self)
 
     case Sync => async {
       val launchedInstances = await(instanceTracker.countLaunchedSpecInstances(runSpec.id))
@@ -65,7 +65,7 @@ trait StartingBehavior extends ReadinessBehavior with StrictLogging { this: Acto
     case Status.Failure(e) =>
       // This is the result of failed initializeStart(...) call. Log the message and
       // restart this actor. Next reincarnation should try to start from the beginning.
-      logger.error(s"Failure in the ${self.path.name} deployment actor: ", e)
+      logger.error(s"Failure in the ${getClass.getSimpleName} deployment actor: ", e)
       throw e
 
     case Done => // This is the result of successful initializeStart(...) call. Nothing to do here

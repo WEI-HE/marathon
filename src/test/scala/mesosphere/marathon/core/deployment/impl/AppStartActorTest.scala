@@ -60,7 +60,6 @@ class AppStartActorTest extends AkkaUnitTest {
       val f = new Fixture
       val app = AppDefinition(id = f.appId, instances = 10)
       val promise = Promise[Unit]()
-      f.scheduler.startRunSpec(any) returns Future.successful(Done)
       val ref = f.startActor(app, scaleTo = 0, promise)
       watch(ref)
 
@@ -77,7 +76,6 @@ class AppStartActorTest extends AkkaUnitTest {
         instances = 10,
         healthChecks = Set(MarathonHttpHealthCheck(portIndex = Some(PortReference(0)))))
       val promise = Promise[Unit]()
-      f.scheduler.startRunSpec(any) returns Future.successful(Done)
       val ref = f.startActor(app, scaleTo = 0, promise)
       watch(ref)
 
@@ -99,6 +97,7 @@ class AppStartActorTest extends AkkaUnitTest {
       val appId = PathId("/app")
 
       launchQueue.get(appId) returns None
+      scheduler.startRunSpec(any) returns Future.successful(Done)
 
       def instanceChanged(app: AppDefinition, condition: Condition): InstanceChanged = {
         val instanceId = Instance.Id.forRunSpec(app.id)

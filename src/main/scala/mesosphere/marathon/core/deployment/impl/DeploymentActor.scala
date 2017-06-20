@@ -1,28 +1,27 @@
 package mesosphere.marathon
 package core.deployment.impl
 
-import akka.Done
-import akka.actor.SupervisorStrategy._
-import akka.actor.{ OneForOneStrategy, _ }
+import akka.{Done}
+import akka.actor.{OneForOneStrategy, _}
 import akka.event.EventStream
 import com.typesafe.scalalogging.StrictLogging
 import mesosphere.marathon.core.deployment._
-import mesosphere.marathon.core.deployment.impl.DeploymentActor.{ Cancel, Fail, NextStep }
+import mesosphere.marathon.core.deployment.impl.DeploymentActor.{Cancel, Fail, NextStep}
 import mesosphere.marathon.core.deployment.impl.DeploymentManagerActor.DeploymentFinished
-import mesosphere.marathon.core.event.{ DeploymentStatus, DeploymentStepFailure, DeploymentStepSuccess }
+import mesosphere.marathon.core.event.{DeploymentStatus, DeploymentStepFailure, DeploymentStepSuccess}
 import mesosphere.marathon.core.health.HealthCheckManager
 import mesosphere.marathon.core.instance.Instance
 import mesosphere.marathon.core.launchqueue.LaunchQueue
 import mesosphere.marathon.core.pod.PodDefinition
 import mesosphere.marathon.core.readiness.ReadinessCheckExecutor
-import mesosphere.marathon.core.task.termination.{ KillReason, KillService }
+import mesosphere.marathon.core.task.termination.{KillReason, KillService}
 import mesosphere.marathon.core.task.tracker.InstanceTracker
-import mesosphere.marathon.state.{ AppDefinition, RunSpec }
+import mesosphere.marathon.state.{AppDefinition, RunSpec}
 import mesosphere.mesos.Constraints
 
 import scala.async.Async._
-import scala.concurrent.{ Future, Promise }
-import scala.util.{ Failure, Success }
+import scala.concurrent.{Future, Promise}
+import scala.util.{Failure, Success}
 
 private class DeploymentActor(
     deploymentManager: ActorRef,
@@ -42,15 +41,29 @@ private class DeploymentActor(
   var currentStepNr: Int = 0
 
   // Default supervision strategy is overridden here to restart deployment child actors (responsible for individual
-  // deployment steps e.g. AppStartActor, TaskStartActor etc.) even if an exception occurs during initialisation.
+  // deployment steps e.g. AppStartActor, TaskStartActor etc.) even if any exception occurs (even during initialisation).
   // This is due to the fact that child actors tend to gather information during preStart about the tasks that are
   // already running from the TaskTracker and LaunchQueue and those calls can timeout. In general deployment child
   // actors are built idempotent which should make restarting them possible.
-  override val supervisorStrategy =
-    OneForOneStrategy() {
-      case _: ActorInitializationException => Restart
-      case t => super.supervisorStrategy.decider.applyOrElse(t, (_: Any) => Escalate)
-    }
+  // Additionally a BackOffSupervisor is used to make sure child actor failures are not overloading other parts of the system
+  // (like LaunchQueue and InstanceTracker) and are not filling the log with exceptions.
+  import scala.concurrent.duration._
+  import akka.pattern.{Backoff, BackoffSupervisor}
+
+  def childSupervisor(props: Props, name: String): Props = {
+    BackoffSupervisor.props(
+      Backoff.onFailure(
+        childProps = props,
+        childName = name,
+        minBackoff = 5.seconds,
+        maxBackoff = 1.minute,
+        randomFactor = 0.2 // adds 20% "noise" to vary the intervals slightly
+      ).withSupervisorStrategy(
+        OneForOneStrategy() {
+          case _ => SupervisorStrategy.Restart
+        }
+      ))
+  }
 
   override def preStart(): Unit = {
     self ! NextStep
@@ -126,8 +139,8 @@ private class DeploymentActor(
   def startRunnable(runnableSpec: RunSpec, scaleTo: Int, status: DeploymentStatus): Future[Unit] = {
     val promise = Promise[Unit]()
     instanceTracker.specInstances(runnableSpec.id).map { instances =>
-      context.actorOf(AppStartActor.props(deploymentManager, status, scheduler, launchQueue, instanceTracker,
-        eventBus, readinessCheckExecutor, runnableSpec, scaleTo, instances, promise))
+      context.actorOf(childSupervisor(AppStartActor.props(deploymentManager, status, scheduler, launchQueue, instanceTracker,
+        eventBus, readinessCheckExecutor, runnableSpec, scaleTo, instances, promise), s"AppStart-${plan.id}"))
     }
     promise.future
   }
@@ -161,8 +174,8 @@ private class DeploymentActor(
         tasksToStart.fold(Future.successful(Done)) { tasksToStart =>
           logger.debug(s"Start next $tasksToStart tasks")
           val promise = Promise[Unit]()
-          context.actorOf(TaskStartActor.props(deploymentManager, status, scheduler, launchQueue, instanceTracker, eventBus,
-            readinessCheckExecutor, runnableSpec, scaleTo, promise))
+          context.actorOf(childSupervisor(TaskStartActor.props(deploymentManager, status, scheduler, launchQueue, instanceTracker, eventBus,
+            readinessCheckExecutor, runnableSpec, scaleTo, promise), s"TaskStart-${plan.id}"))
           promise.future.map(_ => Done)
         }
       }
@@ -189,8 +202,8 @@ private class DeploymentActor(
       Future.successful(Done)
     } else {
       val promise = Promise[Unit]()
-      context.actorOf(TaskReplaceActor.props(deploymentManager, status, killService,
-        launchQueue, instanceTracker, eventBus, readinessCheckExecutor, run, promise))
+      context.actorOf(childSupervisor(TaskReplaceActor.props(deploymentManager, status, killService,
+        launchQueue, instanceTracker, eventBus, readinessCheckExecutor, run, promise), s"TaskReplace-${plan.id}"))
       promise.future.map(_ => Done)
     }
   }
