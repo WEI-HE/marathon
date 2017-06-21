@@ -14,7 +14,7 @@ import kamon.Kamon
 import mesosphere.chaos.http.{ HttpConf, HttpModule, HttpService }
 import mesosphere.chaos.metrics.MetricsModule
 import mesosphere.marathon.api._
-import mesosphere.marathon.core.election.{ ElectionCandidate, ElectionService }
+import mesosphere.marathon.core.election.{ ElectionEventListener, ElectionService }
 import mesosphere.marathon.util.Lock
 import mesosphere.util.{ CallerThreadExecutionContext, PortAllocator }
 import org.rogach.scallop.ScallopConf
@@ -125,7 +125,7 @@ object ForwarderService {
         override def leaderHostPort: Option[String] = leader
         override def localHostPort: String = ???
 
-        def offerLeadership(candidate: ElectionCandidate): Unit = ???
+        def offerLeadership(candidate: ElectionEventListener): Unit = ???
         def abdicateLeadership(): Unit = ???
 
         override def subscribe(self: ActorRef): Unit = ???

@@ -33,7 +33,7 @@ trait ElectionService {
     *
     * @param candidate is called back once elected or defeated
     */
-  def offerLeadership(candidate: ElectionCandidate): Unit
+  def offerLeadership(candidate: ElectionEventListener): Unit
 
   /**
     * abdicateLeadership is called to resign from leadership.
@@ -58,7 +58,7 @@ trait ElectionService {
   * ElectionCandidate is implemented by a leadership election candidate. There is only one
   * ElectionCandidate per ElectionService.
   */
-trait ElectionCandidate {
+trait ElectionEventListener {
   /**
     * stopLeadership is called when the candidate was leader, but was defeated. It is guaranteed
     * that calls to stopLeadership and startLeadership alternate and are synchronized.

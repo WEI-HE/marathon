@@ -12,7 +12,7 @@ import com.google.common.util.concurrent.AbstractExecutionThreadService
 import mesosphere.marathon.MarathonSchedulerActor._
 import mesosphere.marathon.core.base.toRichRuntime
 import mesosphere.marathon.core.deployment.{ DeploymentManager, DeploymentPlan, DeploymentStepInfo }
-import mesosphere.marathon.core.election.{ ElectionCandidate, ElectionService }
+import mesosphere.marathon.core.election.{ ElectionEventListener, ElectionService }
 import mesosphere.marathon.core.group.GroupManager
 import mesosphere.marathon.core.heartbeat._
 import mesosphere.marathon.core.instance.Instance
@@ -76,7 +76,7 @@ class MarathonSchedulerService @Inject() (
   deploymentManager: DeploymentManager,
   @Named("schedulerActor") schedulerActor: ActorRef,
   @Named(ModuleNames.MESOS_HEARTBEAT_ACTOR) mesosHeartbeatActor: ActorRef)(implicit mat: Materializer)
-    extends AbstractExecutionThreadService with ElectionCandidate with DeploymentService {
+    extends AbstractExecutionThreadService with ElectionEventListener with DeploymentService {
 
   import mesosphere.marathon.core.async.ExecutionContexts.global
 
